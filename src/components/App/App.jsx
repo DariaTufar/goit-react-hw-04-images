@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import React , { useState, useEffect, useRef } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -10,84 +10,82 @@ import { ImageGallery } from '../ImageGallery';
 import { Loader } from 'components/Loader';
 import { LoadMoreButton } from 'components/Button';
 
-const status = {
+const STATUS = {
   idle: 0,
   pending: 1,
   resolved: 2,
   rejected: 3,
 };
 
-export class App extends Component {
-  state = {
-    images: [],
-    search: '',
-    totalImages: 0,
-    page: 1,
-    status: status.idle,
-  };
+export const App = () => {
+  const [images, setImages] = useState([]);
+  const [search, setSearch] = useState('');
+  const [totalImages, setTotalImages] = useState(0);
+  const [page, setPage] = useState(1);
+  const [status, setStatus] = useState(STATUS.idle);
+
+  let isFirstLoad = useRef(true);
 
   //========================================================
-  async componentDidUpdate(_, prevState) {
-    const { search, page } = this.state;
+  useEffect(() => {
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      return;
+    }
 
-    if (prevState.search !== search || prevState.page !== page) {
-      this.setState({ status: status.pending });
-      try {
-        const response = await fetchImages(search, page);
-        this.setState(prevState => ({
-          images: [...prevState.images, ...response.hits],
-          status: status.resolved,
-          totalImages: response.totalHits,
-        }));
-      } catch (error) {
-        toast(error.message);
-        this.setState({ status: status.rejected });
+    async function imageSearch() {
+      if (!search) {
         return;
       }
+      setStatus(STATUS.pending);
+      try {
+        const response = await fetchImages(search, page);
+             console.dir(response);
+        setImages(prevImages => [...prevImages, ...response.hits]);
+        
+        setStatus(STATUS.resolved);
+        setTotalImages(response.totalHits);
+   
+      } catch (error) {
+        toast(error.message);
+        setStatus(STATUS.rejected);
+      }
     }
-  }
+
+    imageSearch();
+  }, [search, page]);
+
   //=======================================================
 
-  handleClickLoadMore = page => {
-    this.setState({ page });
-  };
-
-  //=======================
-  handleSearch = search => {
-    this.setState(prevState => {
-      if (prevState.search !== search) {
-        this.setState({
-          images: [],
-          totalImages: 0,
-          page: 1,
-          status: status.idle,
-          search,
-        });
-      } else return;
-    });
+  const handleSearch = newSearch => {
+    if (!newSearch || search === newSearch) {
+      return;
+    }
+    setImages([]);
+    setTotalImages(0);
+    setPage(1);
+    setStatus(STATUS.idle);
+    setSearch(newSearch);
+     
   };
 
   //======================================================
-  render() {
-    return (
+
+  return (
+    <Box>
+      <Searchbar onSubmit={handleSearch} />
       <Box>
-        <Searchbar onSubmit={this.handleSearch}></Searchbar>
-        <Box>
-          <ImageGallery images={this.state.images} />
+        <ImageGallery images={images} />
 
-          {this.state.status === status.pending && <Loader />}
+        {status === STATUS.pending && <Loader />}
 
-          {this.state.status === status.resolved && this.state.totalImages && (
-            <LoadMoreButton
-              onClick={this.handleClickLoadMore}
-              page={this.state.page}
-            />
-          )}
-        </Box>
-
-        <ToastContainer />
-        <GlobalStyle />
+        {status === STATUS.resolved && totalImages && (
+          <LoadMoreButton onClick={setPage} page={page} />
+        )}
       </Box>
-    );
-  }
-}
+
+      <ToastContainer />
+      <GlobalStyle />
+    </Box>
+  );
+};
